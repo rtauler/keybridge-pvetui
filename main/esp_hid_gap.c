@@ -25,11 +25,41 @@
 #include "nimble/nimble_port.h"
 
 #define GATT_SVR_SVC_HID_UUID 0x1812
+#define HID_CONN_INTERVAL_MIN 24
+#define HID_CONN_INTERVAL_MAX 40
+#define HID_CONN_LATENCY 0
+#define HID_CONN_SUPERVISION_TIMEOUT 3200
 
 static const char *TAG = "ESP_HID_GAP";
 static SemaphoreHandle_t s_bt_cb_semaphore;
 static SemaphoreHandle_t s_ble_cb_semaphore;
 static struct ble_hs_adv_fields s_adv_fields;
+
+static int request_persistent_connection_params(uint16_t conn_handle)
+{
+    struct ble_gap_upd_params params = {
+        .itvl_min = HID_CONN_INTERVAL_MIN,
+        .itvl_max = HID_CONN_INTERVAL_MAX,
+        .latency = HID_CONN_LATENCY,
+        .supervision_timeout = HID_CONN_SUPERVISION_TIMEOUT,
+        .min_ce_len = 0,
+        .max_ce_len = 0,
+    };
+    int rc = ble_gap_update_params(conn_handle, &params);
+
+    if (rc != 0) {
+        ESP_LOGW(TAG,
+                 "failed to request persistent connection params; conn_handle=%u rc=%d",
+                 conn_handle, rc);
+    } else {
+        ESP_LOGI(TAG,
+                 "requested persistent connection params; conn_handle=%u interval=%u-%u latency=%u timeout=%u",
+                 conn_handle, params.itvl_min, params.itvl_max,
+                 params.latency, params.supervision_timeout);
+    }
+
+    return rc;
+}
 
 esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
 {
@@ -74,12 +104,24 @@ static int hid_gap_event(struct ble_gap_event *event, void *arg)
         ESP_LOGI(TAG, "connection %s; status=%d",
                  event->connect.status == 0 ? "established" : "failed",
                  event->connect.status);
+        if (event->connect.status == 0) {
+            request_persistent_connection_params(event->connect.conn_handle);
+        } else {
+            esp_hid_ble_gap_adv_start();
+        }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnect; reason=%d", event->disconnect.reason);
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE:
         ESP_LOGI(TAG, "connection updated; status=%d", event->conn_update.status);
+        rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
+        if (rc == 0) {
+            ESP_LOGI(TAG,
+                     "connection params; handle=%u interval=%u latency=%u timeout=%u",
+                     desc.conn_handle, desc.conn_itvl, desc.conn_latency,
+                     desc.supervision_timeout);
+        }
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
         ESP_LOGI(TAG, "advertise complete; reason=%d", event->adv_complete.reason);
@@ -138,7 +180,7 @@ esp_err_t esp_hid_ble_gap_adv_start(void)
 {
     int rc;
     struct ble_gap_adv_params adv_params;
-    int32_t adv_duration_ms = 180000;
+    int32_t adv_duration_ms = BLE_HS_FOREVER;
 
     rc = ble_gap_adv_set_fields(&s_adv_fields);
     if (rc != 0) {

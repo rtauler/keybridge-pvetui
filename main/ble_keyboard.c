@@ -71,6 +71,7 @@ enum {
 
 enum {
     KEY_ENTER = 0x28,
+    KEY_ESCAPE = 0x29,
     KEY_SLASH = 0x38,
     KEY_LEFT_BRACKET = 0x2F,
     KEY_RIGHT_BRACKET = 0x30,
@@ -92,7 +93,9 @@ static const ble_keyboard_action_t s_actions[] = {
     { "view_1", "Alt+1: Switch View 1" },
     { "view_2", "Alt+2: Switch View 2" },
     { "view_3", "Alt+3: Switch View 3" },
+    { "view_4", "Alt+4: Storage" },
     { "select", "Enter: Select" },
+    { "escape", "Esc: Cancel / Back" },
     { "prev_view", "[: Previous View" },
     { "next_view", "]: Next View" },
     { "ssh_shell", "s: SSH Shell" },
@@ -113,7 +116,9 @@ static const action_binding_t s_bindings[] = {
     { "view_1", { MOD_LEFT_ALT, DIGIT_KEY('1') } },
     { "view_2", { MOD_LEFT_ALT, DIGIT_KEY('2') } },
     { "view_3", { MOD_LEFT_ALT, DIGIT_KEY('3') } },
+    { "view_4", { MOD_LEFT_ALT, DIGIT_KEY('4') } },
     { "select", { 0, KEY_ENTER } },
+    { "escape", { 0, KEY_ESCAPE } },
     { "prev_view", { 0, KEY_LEFT_BRACKET } },
     { "next_view", { 0, KEY_RIGHT_BRACKET } },
     { "ssh_shell", { 0, LETTER_KEY('s') } },
