@@ -1,0 +1,13 @@
+# Local tooling
+.codex
+.DS_Store
+Thumbs.db
+
+# Build output
+build/
+.pio/
+
+# ESP-IDF local configuration
+sdkconfig
+sdkconfig.old
+

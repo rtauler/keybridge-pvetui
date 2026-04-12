@@ -1,0 +1,23 @@
+menu "Keybridge Configuration"
+    config APP_WIFI_SSID
+        string "Wi-Fi SSID"
+        default "AWACS"
+
+    config APP_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default "j9t*Dsx86AM@3R.XypvkuGQC4eoLkZ"
+
+    config APP_WIFI_MAXIMUM_RETRY
+        int "Wi-Fi maximum retry count"
+        range 1 100
+        default 10
+
+    config APP_BLE_DEVICE_NAME
+        string "BLE device name"
+        default "Keybridge PVE"
+
+    config APP_HTTP_PORT
+        int "HTTP server port"
+        range 1 65535
+        default 80
+endmenu
