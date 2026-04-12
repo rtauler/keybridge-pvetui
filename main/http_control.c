@@ -76,6 +76,7 @@ static const char INDEX_HTML[] =
 "'<strong>System Status</strong>' +"
 "'<div class=\"status-line\">Wi-Fi: <b>'+(s.wifi_connected?'connected':'disconnected')+'</b> on <b>'+s.ssid+'</b></div>' +"
 "'<div class=\"status-line\">IP: <b>'+(s.ip||'pending')+'</b></div>' +"
+"'<div class=\"status-line\">Host: <b>'+(s.hostname?s.hostname+'.local':'pending')+'</b></div>' +"
 "'<div class=\"status-line\">BLE: <b>'+(s.ble_connected?'connected':'waiting for host pairing')+'</b></div>' +"
 "'<div class=\"status-line\">Device: <b>'+s.device_name+'</b></div>';}"
 "async function sendAction(action){const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});"
@@ -114,11 +115,12 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     written = snprintf(
         body,
         STATUS_BUF_SIZE,
-        "{\"wifi_connected\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"ble_connected\":%s,"
+        "{\"wifi_connected\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"hostname\":\"%s\",\"ble_connected\":%s,"
         "\"device_name\":\"%s\",\"actions\":[",
         wifi_manager_is_connected() ? "true" : "false",
         wifi_manager_get_ssid(),
         wifi_manager_get_ip(),
+        wifi_manager_get_hostname(),
         ble_keyboard_is_connected() ? "true" : "false",
         ble_keyboard_get_device_name()
     );

@@ -16,6 +16,10 @@ menu "Keybridge Configuration"
         string "BLE device name"
         default "Keybridge PVE"
 
+    config APP_MDNS_HOSTNAME
+        string "Advertised hostname"
+        default "keybridge-pve"
+
     config APP_HTTP_PORT
         int "HTTP server port"
         range 1 65535

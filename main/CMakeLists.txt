@@ -9,5 +9,5 @@ set(srcs
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "."
-    REQUIRES bt esp_event esp_hid esp_http_server esp_netif esp_wifi nvs_flash
+    REQUIRES bt esp_event esp_hid esp_http_server esp_netif esp_wifi mdns nvs_flash
 )
