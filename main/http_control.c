@@ -43,6 +43,11 @@ static const char INDEX_HTML[] =
 ".status strong{display:block;font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}"
 ".status-line{display:flex;justify-content:space-between;gap:10px;padding:2px 0;color:#d9e2ec;font-size:.8rem;}"
 ".status-line b{color:var(--text);font-weight:700;text-align:right;}"
+".text-entry{display:grid;gap:8px;}"
+".text-entry textarea{width:100%;min-height:120px;resize:vertical;border:1px solid var(--border);border-radius:16px;padding:12px;background:#0a0f15;color:var(--text);font:600 .95rem/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;}"
+".text-entry textarea::placeholder{color:var(--muted);}"
+".text-actions{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;}"
+".text-hint{font-size:.72rem;color:var(--muted);padding:0 2px;}"
 "@media (min-width:700px){.wrap{max-width:900px;}.remote{grid-template-columns:1.1fr .9fr;align-items:start;}.section.nav{grid-row:span 2;}}"
 "</style></head><body><div class='wrap'><div class='remote'>"
 "<div class='section'><div class='views'>"
@@ -70,6 +75,7 @@ static const char INDEX_HTML[] =
 "<button data-action='select_lxc_to_htop'><span class='icon small'>H</span><span class='label'>Select LXC to htop</span></button>"
 "<button class='danger' data-action='close_session'><span class='icon small'>^C</span><span class='label'>Close session</span></button>"
 "</div></div>"
+"<div class='section text-entry'><textarea id='text-input' placeholder='Type shell commands here. Newlines are sent as Enter.' autocapitalize='off' autocomplete='off' autocorrect='off' spellcheck='false'></textarea><div class='text-actions'><div class='text-hint'>Use Ctrl+Enter to send quickly.</div><button class='primary wide' id='send-text' type='button'><span class='icon small'>&#10148;</span><span class='label'>Send text</span></button></div></div>"
 "<div class='status' id='status'>Loading status...</div>"
 "</div></div>"
 "<script>"
@@ -83,7 +89,12 @@ static const char INDEX_HTML[] =
 "'<div class=\"status-line\"><span>Device</span><b>'+s.device_name+'</b></div>';}"
 "async function sendAction(action){const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});"
 "if(!r.ok){const t=await r.text();alert(t||('Request failed: '+r.status));}await refreshStatus();}"
+"async function sendText(){const input=document.getElementById('text-input');const text=input.value;"
+"if(!text){return;}const r=await fetch('/api/text',{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:text});"
+"if(!r.ok){const t=await r.text();alert(t||('Request failed: '+r.status));return;}input.value='';await refreshStatus();}"
 "document.querySelectorAll('button[data-action]').forEach((btn)=>btn.addEventListener('click',()=>sendAction(btn.dataset.action)));"
+"document.getElementById('send-text').addEventListener('click',sendText);"
+"document.getElementById('text-input').addEventListener('keydown',(event)=>{if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();sendText();}});"
 "refreshStatus();setInterval(refreshStatus,3000);"
 "</script></body></html>";
 
@@ -230,6 +241,58 @@ static esp_err_t action_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t text_post_handler(httpd_req_t *req)
+{
+    char *buffer;
+    int offset = 0;
+    int received;
+    esp_err_t err;
+
+    if (req->content_len <= 0 || req->content_len > 512) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "text payload must be 1-512 bytes");
+        return ESP_FAIL;
+    }
+
+    buffer = calloc(1, req->content_len + 1);
+    if (buffer == NULL) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "allocation failed");
+        return ESP_FAIL;
+    }
+
+    while (offset < req->content_len) {
+        received = httpd_req_recv(req, buffer + offset, req->content_len - offset);
+        if (received <= 0) {
+            free(buffer);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "failed to read request body");
+            return ESP_FAIL;
+        }
+        offset += received;
+    }
+
+    err = ble_keyboard_send_text(buffer, (size_t)req->content_len);
+    free(buffer);
+
+    if (err == ESP_ERR_INVALID_STATE) {
+        httpd_resp_set_status(req, "409 Conflict");
+        httpd_resp_sendstr(req, "BLE keyboard is not connected");
+        return ESP_FAIL;
+    }
+
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "text contains unsupported characters");
+        return ESP_FAIL;
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "text dispatch failed: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "text send failed");
+        return ESP_FAIL;
+    }
+
+    send_json_string(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 esp_err_t http_control_start(void)
 {
     httpd_handle_t server = NULL;
@@ -249,6 +312,11 @@ esp_err_t http_control_start(void)
         .method = HTTP_POST,
         .handler = action_post_handler,
     };
+    httpd_uri_t text_uri = {
+        .uri = "/api/text",
+        .method = HTTP_POST,
+        .handler = text_post_handler,
+    };
 
     config.server_port = CONFIG_APP_HTTP_PORT;
     config.uri_match_fn = httpd_uri_match_wildcard;
@@ -257,6 +325,7 @@ esp_err_t http_control_start(void)
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &index_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &status_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &action_uri));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &text_uri));
 
     ESP_LOGI(TAG, "HTTP server started on port %d", CONFIG_APP_HTTP_PORT);
     return ESP_OK;

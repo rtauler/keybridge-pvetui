@@ -67,9 +67,23 @@ static esp_hid_device_config_t s_hid_config = {
 enum {
     MOD_LEFT_CTRL = 0x01,
     MOD_LEFT_ALT = 0x04,
+    MOD_LEFT_SHIFT = 0x02,
 };
 
 enum {
+    KEY_TAB = 0x2B,
+    KEY_SPACE = 0x2C,
+    KEY_MINUS = 0x2D,
+    KEY_EQUAL = 0x2E,
+    KEY_LEFT_BRACKET = 0x2F,
+    KEY_RIGHT_BRACKET = 0x30,
+    KEY_BACKSLASH = 0x31,
+    KEY_SEMICOLON = 0x33,
+    KEY_APOSTROPHE = 0x34,
+    KEY_GRAVE = 0x35,
+    KEY_COMMA = 0x36,
+    KEY_PERIOD = 0x37,
+    KEY_SLASH = 0x38,
     KEY_ENTER = 0x28,
     KEY_ESCAPE = 0x29,
     KEY_LEFT_ARROW = 0x50,
@@ -204,6 +218,145 @@ static void send_key_sequence(const key_combo_t *sequence, size_t length)
     }
 }
 
+static bool ascii_to_key_combo(char ch, key_combo_t *combo)
+{
+    if (combo == NULL) {
+        return false;
+    }
+
+    if (ch >= 'a' && ch <= 'z') {
+        combo->modifier = 0;
+        combo->keycode = LETTER_KEY(ch);
+        return true;
+    }
+
+    if (ch >= 'A' && ch <= 'Z') {
+        combo->modifier = MOD_LEFT_SHIFT;
+        combo->keycode = LETTER_KEY((char)(ch - 'A' + 'a'));
+        return true;
+    }
+
+    if (ch >= '1' && ch <= '9') {
+        combo->modifier = 0;
+        combo->keycode = DIGIT_KEY(ch);
+        return true;
+    }
+
+    switch (ch) {
+    case '0':
+        *combo = (key_combo_t){ 0, DIGIT_KEY('0') };
+        return true;
+    case '\n':
+    case '\r':
+        *combo = (key_combo_t){ 0, KEY_ENTER };
+        return true;
+    case '\t':
+        *combo = (key_combo_t){ 0, KEY_TAB };
+        return true;
+    case ' ':
+        *combo = (key_combo_t){ 0, KEY_SPACE };
+        return true;
+    case '-':
+        *combo = (key_combo_t){ 0, KEY_MINUS };
+        return true;
+    case '_':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_MINUS };
+        return true;
+    case '=':
+        *combo = (key_combo_t){ 0, KEY_EQUAL };
+        return true;
+    case '+':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_EQUAL };
+        return true;
+    case '[':
+        *combo = (key_combo_t){ 0, KEY_LEFT_BRACKET };
+        return true;
+    case '{':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_LEFT_BRACKET };
+        return true;
+    case ']':
+        *combo = (key_combo_t){ 0, KEY_RIGHT_BRACKET };
+        return true;
+    case '}':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_RIGHT_BRACKET };
+        return true;
+    case '\\':
+        *combo = (key_combo_t){ 0, KEY_BACKSLASH };
+        return true;
+    case '|':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_BACKSLASH };
+        return true;
+    case ';':
+        *combo = (key_combo_t){ 0, KEY_SEMICOLON };
+        return true;
+    case ':':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_SEMICOLON };
+        return true;
+    case '\'':
+        *combo = (key_combo_t){ 0, KEY_APOSTROPHE };
+        return true;
+    case '"':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_APOSTROPHE };
+        return true;
+    case '`':
+        *combo = (key_combo_t){ 0, KEY_GRAVE };
+        return true;
+    case '~':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_GRAVE };
+        return true;
+    case ',':
+        *combo = (key_combo_t){ 0, KEY_COMMA };
+        return true;
+    case '<':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_COMMA };
+        return true;
+    case '.':
+        *combo = (key_combo_t){ 0, KEY_PERIOD };
+        return true;
+    case '>':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_PERIOD };
+        return true;
+    case '/':
+        *combo = (key_combo_t){ 0, KEY_SLASH };
+        return true;
+    case '?':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, KEY_SLASH };
+        return true;
+    case '!':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('1') };
+        return true;
+    case '@':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('2') };
+        return true;
+    case '#':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('3') };
+        return true;
+    case '$':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('4') };
+        return true;
+    case '%':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('5') };
+        return true;
+    case '^':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('6') };
+        return true;
+    case '&':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('7') };
+        return true;
+    case '*':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('8') };
+        return true;
+    case '(':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('9') };
+        return true;
+    case ')':
+        *combo = (key_combo_t){ MOD_LEFT_SHIFT, DIGIT_KEY('0') };
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
     esp_hidd_event_t event = (esp_hidd_event_t)id;
@@ -319,5 +472,35 @@ esp_err_t ble_keyboard_send_action(const char *action_id)
 
     send_key_sequence(sequence_binding->sequence, sequence_binding->length);
     ESP_LOGI(TAG, "sent action=%s", action_id);
+    return ESP_OK;
+}
+
+esp_err_t ble_keyboard_send_text(const char *text, size_t length)
+{
+    size_t i;
+    key_combo_t combo;
+
+    if (!s_state.connected) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (text == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    for (i = 0; i < length; ++i) {
+        if (!ascii_to_key_combo(text[i], &combo)) {
+            ESP_LOGW(TAG, "unsupported text character 0x%02x at index %u", (unsigned char)text[i], (unsigned)i);
+            return ESP_ERR_NOT_SUPPORTED;
+        }
+    }
+
+    for (i = 0; i < length; ++i) {
+        ascii_to_key_combo(text[i], &combo);
+        send_key_combo(combo);
+        vTaskDelay(pdMS_TO_TICKS(45));
+    }
+
+    ESP_LOGI(TAG, "sent text length=%u", (unsigned)length);
     return ESP_OK;
 }
