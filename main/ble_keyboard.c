@@ -65,16 +65,17 @@ static esp_hid_device_config_t s_hid_config = {
 };
 
 enum {
-    MOD_LEFT_SHIFT = 0x02,
+    MOD_LEFT_CTRL = 0x01,
     MOD_LEFT_ALT = 0x04,
 };
 
 enum {
     KEY_ENTER = 0x28,
     KEY_ESCAPE = 0x29,
-    KEY_SLASH = 0x38,
-    KEY_LEFT_BRACKET = 0x2F,
-    KEY_RIGHT_BRACKET = 0x30,
+    KEY_LEFT_ARROW = 0x50,
+    KEY_DOWN_ARROW = 0x51,
+    KEY_UP_ARROW = 0x52,
+    KEY_RIGHT_ARROW = 0x4F,
 };
 
 #define LETTER_KEY(ch) ((uint8_t)(0x04 + ((ch) - 'a')))
@@ -85,50 +86,72 @@ typedef struct {
     key_combo_t combo;
 } action_binding_t;
 
+typedef struct {
+    const char *id;
+    const key_combo_t *sequence;
+    size_t length;
+} sequence_binding_t;
+
 static const ble_keyboard_action_t s_actions[] = {
-    { "navigate_left", "h: Navigate Left" },
-    { "navigate_down", "j: Navigate Down" },
-    { "navigate_up", "k: Navigate Up" },
-    { "navigate_right", "l: Navigate Right" },
+    { "navigate_left", "Left Arrow: Navigate Left" },
+    { "navigate_down", "Down Arrow: Navigate Down" },
+    { "navigate_up", "Up Arrow: Navigate Up" },
+    { "navigate_right", "Right Arrow: Navigate Right" },
     { "view_1", "Alt+1: Switch View 1" },
     { "view_2", "Alt+2: Switch View 2" },
     { "view_3", "Alt+3: Switch View 3" },
     { "view_4", "Alt+4: Storage" },
     { "select", "Enter: Select" },
     { "escape", "Esc: Cancel / Back" },
-    { "prev_view", "[: Previous View" },
-    { "next_view", "]: Next View" },
     { "ssh_shell", "s: SSH Shell" },
-    { "vnc_console", "v: VNC Console" },
     { "context_menu", "m: Context Menu" },
-    { "global_menu", "g: Global Menu" },
-    { "search", "/: Search" },
     { "auto_refresh", "a: Auto-refresh" },
-    { "help", "?: Help" },
-    { "quit", "q: Quit" },
+    { "jump_top_pane", "Ctrl+B, Up Arrow: Jump Top Pane" },
+    { "jump_bottom_pane", "Ctrl+B, Down Arrow: Jump Down Pane" },
+    { "select_lxc_to_htop", "Ctrl+B, H: Select LXC to htop" },
+    { "close_session", "Ctrl+C: Close Session" },
 };
 
 static const action_binding_t s_bindings[] = {
-    { "navigate_left", { 0, LETTER_KEY('h') } },
-    { "navigate_down", { 0, LETTER_KEY('j') } },
-    { "navigate_up", { 0, LETTER_KEY('k') } },
-    { "navigate_right", { 0, LETTER_KEY('l') } },
+    { "navigate_left", { 0, KEY_LEFT_ARROW } },
+    { "navigate_down", { 0, KEY_DOWN_ARROW } },
+    { "navigate_up", { 0, KEY_UP_ARROW } },
+    { "navigate_right", { 0, KEY_RIGHT_ARROW } },
     { "view_1", { MOD_LEFT_ALT, DIGIT_KEY('1') } },
     { "view_2", { MOD_LEFT_ALT, DIGIT_KEY('2') } },
     { "view_3", { MOD_LEFT_ALT, DIGIT_KEY('3') } },
     { "view_4", { MOD_LEFT_ALT, DIGIT_KEY('4') } },
     { "select", { 0, KEY_ENTER } },
     { "escape", { 0, KEY_ESCAPE } },
-    { "prev_view", { 0, KEY_LEFT_BRACKET } },
-    { "next_view", { 0, KEY_RIGHT_BRACKET } },
     { "ssh_shell", { 0, LETTER_KEY('s') } },
-    { "vnc_console", { 0, LETTER_KEY('v') } },
     { "context_menu", { 0, LETTER_KEY('m') } },
-    { "global_menu", { 0, LETTER_KEY('g') } },
-    { "search", { 0, KEY_SLASH } },
     { "auto_refresh", { 0, LETTER_KEY('a') } },
-    { "help", { MOD_LEFT_SHIFT, KEY_SLASH } },
-    { "quit", { 0, LETTER_KEY('q') } },
+};
+
+static const key_combo_t s_jump_top_pane_sequence[] = {
+    { MOD_LEFT_CTRL, LETTER_KEY('b') },
+    { 0, KEY_UP_ARROW },
+};
+
+static const key_combo_t s_jump_bottom_pane_sequence[] = {
+    { MOD_LEFT_CTRL, LETTER_KEY('b') },
+    { 0, KEY_DOWN_ARROW },
+};
+
+static const key_combo_t s_select_lxc_to_htop_sequence[] = {
+    { MOD_LEFT_CTRL, LETTER_KEY('b') },
+    { 0, LETTER_KEY('h') },
+};
+
+static const key_combo_t s_close_session_sequence[] = {
+    { MOD_LEFT_CTRL, LETTER_KEY('c') },
+};
+
+static const sequence_binding_t s_sequence_bindings[] = {
+    { "jump_top_pane", s_jump_top_pane_sequence, sizeof(s_jump_top_pane_sequence) / sizeof(s_jump_top_pane_sequence[0]) },
+    { "jump_bottom_pane", s_jump_bottom_pane_sequence, sizeof(s_jump_bottom_pane_sequence) / sizeof(s_jump_bottom_pane_sequence[0]) },
+    { "select_lxc_to_htop", s_select_lxc_to_htop_sequence, sizeof(s_select_lxc_to_htop_sequence) / sizeof(s_select_lxc_to_htop_sequence[0]) },
+    { "close_session", s_close_session_sequence, sizeof(s_close_session_sequence) / sizeof(s_close_session_sequence[0]) },
 };
 
 static const action_binding_t *find_action(const char *action_id)
@@ -138,6 +161,19 @@ static const action_binding_t *find_action(const char *action_id)
     for (i = 0; i < sizeof(s_bindings) / sizeof(s_bindings[0]); ++i) {
         if (strcmp(s_bindings[i].id, action_id) == 0) {
             return &s_bindings[i];
+        }
+    }
+
+    return NULL;
+}
+
+static const sequence_binding_t *find_sequence_action(const char *action_id)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof(s_sequence_bindings) / sizeof(s_sequence_bindings[0]); ++i) {
+        if (strcmp(s_sequence_bindings[i].id, action_id) == 0) {
+            return &s_sequence_bindings[i];
         }
     }
 
@@ -156,6 +192,16 @@ static void send_key_combo(key_combo_t combo)
 
     memset(report, 0, sizeof(report));
     esp_hidd_dev_input_set(s_state.hid_dev, 0, 1, report, sizeof(report));
+}
+
+static void send_key_sequence(const key_combo_t *sequence, size_t length)
+{
+    size_t i;
+
+    for (i = 0; i < length; ++i) {
+        send_key_combo(sequence[i]);
+        vTaskDelay(pdMS_TO_TICKS(60));
+    }
 }
 
 static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
@@ -253,17 +299,25 @@ const ble_keyboard_action_t *ble_keyboard_get_actions(size_t *count)
 esp_err_t ble_keyboard_send_action(const char *action_id)
 {
     const action_binding_t *binding;
+    const sequence_binding_t *sequence_binding;
 
     if (!s_state.connected) {
         return ESP_ERR_INVALID_STATE;
     }
 
     binding = find_action(action_id);
-    if (binding == NULL) {
+    if (binding != NULL) {
+        send_key_combo(binding->combo);
+        ESP_LOGI(TAG, "sent action=%s", action_id);
+        return ESP_OK;
+    }
+
+    sequence_binding = find_sequence_action(action_id);
+    if (sequence_binding == NULL) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    send_key_combo(binding->combo);
+    send_key_sequence(sequence_binding->sequence, sequence_binding->length);
     ESP_LOGI(TAG, "sent action=%s", action_id);
     return ESP_OK;
 }
